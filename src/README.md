@@ -28,20 +28,20 @@ A FastAPI application for extracurricular activities and school announcements.
 
 ## API Endpoints
 
-| Method | Endpoint                                                          | Description                                                         |
-| ------ | ----------------------------------------------------------------- | ------------------------------------------------------------------- |
-| GET    | `/activities`                                                     | Get all activities with their details and current participant count |
-| POST   | `/activities/{activity_name}/signup?email=student@mergington.edu` | Sign up for an activity                                             |
-| POST   | `/auth/login?username=...&password=...`                           | Sign in and receive a bearer token                                  |
-| GET    | `/announcements`                                                  | Get announcements within their start and expiration dates           |
-| GET    | `/announcements/manage`                                           | List all announcements (bearer token required)                     |
-| POST   | `/announcements`                                                  | Create an announcement (bearer token required)                     |
-| PUT    | `/announcements/{announcement_id}`                                | Update an announcement (bearer token required)                     |
-| DELETE | `/announcements/{announcement_id}`                                | Delete an announcement (bearer token required)                     |
-| GET    | `/auth/check-session`                                             | Validate the bearer token and return the signed-in teacher          |
-| POST   | `/auth/logout`                                                    | Revoke the bearer token                                             |
+| Method | Endpoint                                                          | Description                                                          |
+| ------ | ----------------------------------------------------------------- | -------------------------------------------------------------------- |
+| GET    | `/activities`                                                     | Get all activities with their details and current participant count  |
+| POST   | `/activities/{activity_name}/signup?email=student@mergington.edu` | Sign up for an activity as the signed-in teacher                     |
+| POST   | `/auth/login`                                                     | Sign in with a JSON body (`username`, `password`) and receive an HttpOnly session cookie |
+| GET    | `/announcements`                                                  | Get announcements within their start and expiration dates            |
+| GET    | `/announcements/manage`                                           | List all announcements (session cookie required)                     |
+| POST   | `/announcements`                                                  | Create an announcement (session cookie required)                     |
+| PUT    | `/announcements/{announcement_id}`                                | Update an announcement (session cookie required)                     |
+| DELETE | `/announcements/{announcement_id}`                                | Delete an announcement (session cookie required)                     |
+| GET    | `/auth/check-session`                                             | Validate the current session cookie and return the signed-in teacher |
+| POST   | `/auth/logout`                                                    | Revoke the current session cookie                                    |
 
-Announcement create and update requests use JSON with a `message` (up to 1,000 characters), a required `expiration_date` (`YYYY-MM-DD`), and an optional `start_date` (`YYYY-MM-DD`). The start date must not be after the expiration date. Include `Authorization: Bearer <token>` for protected endpoints. Announcements are stored in MongoDB; initialization adds an example announcement when that collection is empty.
+Announcement create and update requests use JSON with a `message` (up to 1,000 characters), a required `expiration_date` (`YYYY-MM-DD`), and an optional `start_date` (`YYYY-MM-DD`). The start date must not be after the expiration date. Protected endpoints use the same-origin HttpOnly session cookie set by `/auth/login`. Announcements are stored in MongoDB; initialization adds an example announcement when that collection is empty.
 
 ## Data Model
 
@@ -58,4 +58,4 @@ The application uses a simple data model with meaningful identifiers:
    - Name
    - Grade level
 
-All data is stored in memory, which means data will be reset when the server restarts.
+Application data is stored in MongoDB.

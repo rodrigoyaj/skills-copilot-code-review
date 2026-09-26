@@ -1,9 +1,9 @@
-"""
-MongoDB database configuration and setup for Mergington High School API
-"""
+"""MongoDB database configuration and setup for Mergington High School API."""
 
-from pymongo import MongoClient
+from datetime import datetime, timezone
+
 from argon2 import PasswordHasher, exceptions as argon2_exceptions
+from pymongo import ASCENDING, MongoClient
 
 # Connect to MongoDB
 client = MongoClient('mongodb://localhost:27017/')
@@ -34,28 +34,67 @@ def verify_password(hashed_password: str, plain_password: str) -> bool:
     except argon2_exceptions.VerifyMismatchError:
         return False
     except Exception:
-        # For any other exception (e.g., invalid hash), treat as non-match
         return False
 
 
-def init_database():
-    """Initialize database if empty"""
+def _ensure_session_indexes():
+    existing_index_names = {
+        index["name"] for index in sessions_collection.list_indexes()
+    }
 
-    # Initialize activities if empty
+    if "session_token_hash_idx" not in existing_index_names:
+        sessions_collection.create_index(
+            [("token_hash", ASCENDING)],
+            name="session_token_hash_idx",
+            unique=True
+        )
+
+    if "session_expiration_ttl_idx" not in existing_index_names:
+        sessions_collection.create_index(
+            [("expires_at", ASCENDING)],
+            name="session_expiration_ttl_idx",
+            expireAfterSeconds=0
+        )
+
+    if "session_username_expires_idx" not in existing_index_names:
+        sessions_collection.create_index(
+            [("username", ASCENDING), ("expires_at", ASCENDING)],
+            name="session_username_expires_idx"
+        )
+
+
+def _cleanup_sessions():
+    now = datetime.now(timezone.utc)
+    sessions_collection.delete_many({
+        "expires_at": {
+            "$type": "date",
+            "$lte": now
+        }
+    })
+    sessions_collection.delete_many({
+        "expires_at": {
+            "$type": "number",
+            "$lte": now.timestamp()
+        }
+    })
+
+
+def init_database():
+    """Initialize database if empty."""
     if activities_collection.count_documents({}) == 0:
         for name, details in initial_activities.items():
             activities_collection.insert_one({"_id": name, **details})
 
-    # Initialize teacher accounts if empty
     if teachers_collection.count_documents({}) == 0:
         for teacher in initial_teachers:
             teachers_collection.insert_one(
                 {"_id": teacher["username"], **teacher})
 
-    # Initialize announcements if empty
     if announcements_collection.count_documents({}) == 0:
         announcements_collection.insert_many(initial_announcements)
 
+    _cleanup_sessions()
+    _ensure_session_indexes()
 
 # Initial database if empty
 initial_activities = {

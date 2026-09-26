@@ -45,6 +45,17 @@ def _serialize(announcement: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def require_announcement_manager(
+    teacher: Dict[str, Any] = Depends(get_current_teacher)
+) -> Dict[str, Any]:
+    if teacher.get("role") != "admin":
+        raise HTTPException(
+            status_code=403,
+            detail="You are not authorized to manage announcements"
+        )
+    return teacher
+
+
 @router.get("", response_model=List[Dict[str, Any]])
 def get_active_announcements() -> List[Dict[str, Any]]:
     """Return announcements that are currently within their display dates."""
@@ -64,7 +75,7 @@ def get_active_announcements() -> List[Dict[str, Any]]:
 
 @router.get("/manage", response_model=List[Dict[str, Any]])
 def get_all_announcements(
-    _teacher: Dict[str, Any] = Depends(get_current_teacher)
+    _teacher: Dict[str, Any] = Depends(require_announcement_manager)
 ) -> List[Dict[str, Any]]:
     """Return all announcements for the signed-in manager."""
     return [
@@ -76,7 +87,7 @@ def get_all_announcements(
 @router.post("", status_code=201)
 def create_announcement(
     payload: AnnouncementPayload,
-    _teacher: Dict[str, Any] = Depends(get_current_teacher)
+    _teacher: Dict[str, Any] = Depends(require_announcement_manager)
 ) -> Dict[str, Any]:
     """Create an announcement."""
     announcement = {"_id": str(uuid4()), **_announcement_data(payload)}
@@ -88,7 +99,7 @@ def create_announcement(
 def update_announcement(
     announcement_id: str,
     payload: AnnouncementPayload,
-    _teacher: Dict[str, Any] = Depends(get_current_teacher)
+    _teacher: Dict[str, Any] = Depends(require_announcement_manager)
 ) -> Dict[str, Any]:
     """Replace an announcement's message and display dates."""
     announcement = _announcement_data(payload)
@@ -104,7 +115,7 @@ def update_announcement(
 @router.delete("/{announcement_id}")
 def delete_announcement(
     announcement_id: str,
-    _teacher: Dict[str, Any] = Depends(get_current_teacher)
+    _teacher: Dict[str, Any] = Depends(require_announcement_manager)
 ) -> Dict[str, str]:
     """Delete an announcement."""
     result = announcements_collection.delete_one({"_id": announcement_id})

@@ -77,8 +77,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Authentication state
   let currentUser = null;
-  let isSessionValidated = false;
   let editingAnnouncementId = null;
+  let announcementModalTrigger = null;
 
   // Time range mappings for the dropdown
   const timeRanges = {
@@ -134,47 +134,71 @@ document.addEventListener("DOMContentLoaded", () => {
     fetchActivities();
   }
 
-  // Check if user is already logged in (from localStorage)
-  function checkAuthentication() {
-    const savedUser = localStorage.getItem("currentUser");
-    if (savedUser) {
-      try {
-        currentUser = JSON.parse(savedUser);
-        updateAuthUI();
-        // Verify the stored user with the server
-        if (currentUser.access_token) {
-          validateUserSession();
-        } else {
-          logout(false);
-        }
-      } catch (error) {
-        console.error("Error parsing saved user", error);
-        logout(); // Clear invalid data
-      }
+  function withSessionCredentials(options = {}) {
+    return {
+      credentials: "include",
+      ...options,
+    };
+  }
+
+  function clearAuthenticationState() {
+    currentUser = null;
+    updateAuthUI();
+  }
+
+  function handleAuthenticationFailure() {
+    clearAuthenticationState();
+    showMessage("Your session has ended. Please sign in again.", "info");
+  }
+
+  function canManageAnnouncements() {
+    return currentUser && currentUser.role === "admin";
+  }
+
+  function getFocusableElements(container) {
+    return Array.from(
+      container.querySelectorAll(
+        'button, [href], input, textarea, select, [tabindex]:not([tabindex="-1"])'
+      )
+    ).filter(
+      (element) =>
+        !element.disabled &&
+        !element.hasAttribute("hidden") &&
+        !element.closest(".hidden")
+    );
+  }
+
+  async function parseResponsePayload(response) {
+    const contentType = response.headers.get("content-type") || "";
+    if (contentType.includes("application/json")) {
+      return response.json();
     }
 
-    // Set authentication class on body
+    const text = await response.text();
+    return text ? { detail: text } : {};
+  }
+
+  // Check if the user already has a valid cookie-backed session
+  function checkAuthentication() {
+    validateUserSession();
     updateAuthBodyClass();
   }
 
   // Validate user session with the server
   async function validateUserSession() {
     try {
-      const response = await fetch("/auth/check-session", {
-        headers: getAuthorizationHeaders(),
-      });
+      const response = await fetch(
+        "/auth/check-session",
+        withSessionCredentials()
+      );
 
       if (!response.ok) {
-        // Session invalid, log out
-        logout(false);
+        clearAuthenticationState();
         return;
       }
 
-      // Session is valid, update user data
       const userData = await response.json();
-      currentUser = { ...userData, access_token: currentUser.access_token };
-      isSessionValidated = true;
-      localStorage.setItem("currentUser", JSON.stringify(currentUser));
+      currentUser = userData;
       updateAuthUI();
     } catch (error) {
       console.error("Error validating session:", error);
@@ -183,11 +207,21 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Update UI based on authentication state
   function updateAuthUI() {
+    manageAnnouncementsButton.setAttribute(
+      "aria-expanded",
+      currentUser && !announcementsModal.classList.contains("hidden")
+        ? "true"
+        : "false"
+    );
+
     if (currentUser) {
       loginButton.classList.add("hidden");
       userInfo.classList.remove("hidden");
       displayName.textContent = currentUser.display_name;
-      manageAnnouncementsButton.classList.toggle("hidden", !isSessionValidated);
+      manageAnnouncementsButton.classList.toggle(
+        "hidden",
+        !canManageAnnouncements()
+      );
     } else {
       loginButton.classList.remove("hidden");
       userInfo.classList.add("hidden");
@@ -213,12 +247,14 @@ document.addEventListener("DOMContentLoaded", () => {
   async function login(username, password) {
     try {
       const response = await fetch(
-        `/auth/login?username=${encodeURIComponent(
-          username
-        )}&password=${encodeURIComponent(password)}`,
-        {
+        "/auth/login",
+        withSessionCredentials({
           method: "POST",
-        }
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ username, password }),
+        })
       );
 
       const data = await response.json();
@@ -233,8 +269,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
       // Login successful
       currentUser = data;
-      isSessionValidated = true;
-      localStorage.setItem("currentUser", JSON.stringify(data));
       updateAuthUI();
       closeLoginModalHandler();
       showMessage(`Welcome, ${currentUser.display_name}!`, "success");
@@ -248,28 +282,21 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Logout function
   async function logout(revokeSession = true) {
-    const accessToken = currentUser && currentUser.access_token;
-    if (revokeSession && accessToken) {
+    if (revokeSession) {
       try {
-        await fetch("/auth/logout", {
-          method: "POST",
-          headers: { Authorization: `Bearer ${accessToken}` },
-        });
+        await fetch(
+          "/auth/logout",
+          withSessionCredentials({
+            method: "POST",
+          })
+        );
       } catch (error) {
         console.error("Error revoking session:", error);
       }
     }
-    currentUser = null;
-    isSessionValidated = false;
-    localStorage.removeItem("currentUser");
-    updateAuthUI();
-    showMessage("You have been logged out.", "info");
-  }
 
-  function getAuthorizationHeaders() {
-    return currentUser && currentUser.access_token
-      ? { Authorization: `Bearer ${currentUser.access_token}` }
-      : {};
+    clearAuthenticationState();
+    showMessage("You have been logged out.", "info");
   }
 
   // Show message in login modal
@@ -388,23 +415,46 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function closeAnnouncementsModal() {
     announcementsModal.classList.remove("show");
+    manageAnnouncementsButton.setAttribute("aria-expanded", "false");
     setTimeout(() => {
       announcementsModal.classList.add("hidden");
       resetAnnouncementForm();
+      const fallbackFocusTarget = manageAnnouncementsButton.classList.contains(
+        "hidden"
+      )
+        ? loginButton
+        : manageAnnouncementsButton;
+      const focusTarget =
+        announcementModalTrigger &&
+        document.contains(announcementModalTrigger) &&
+        !announcementModalTrigger.classList.contains("hidden")
+          ? announcementModalTrigger
+          : fallbackFocusTarget;
+      focusTarget.focus();
+      announcementModalTrigger = null;
     }, 300);
-    manageAnnouncementsButton.focus();
   }
 
   async function openAnnouncementsModal() {
-    if (!currentUser || !currentUser.access_token) {
+    if (!currentUser) {
       showMessage("Please sign in to manage announcements.", "error");
       return;
     }
+    if (!canManageAnnouncements()) {
+      showMessage("You do not have permission to manage announcements.", "error");
+      return;
+    }
     resetAnnouncementForm();
+    announcementModalTrigger =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : manageAnnouncementsButton;
     announcementsModal.classList.remove("hidden");
+    manageAnnouncementsButton.setAttribute("aria-expanded", "true");
     setTimeout(() => {
       announcementsModal.classList.add("show");
-      announcementMessageInput.focus();
+      const [initialFocusTarget] = getFocusableElements(announcementsModal);
+      (initialFocusTarget || closeAnnouncementsButton).focus();
     }, 10);
     await loadManagedAnnouncements();
   }
@@ -413,9 +463,15 @@ document.addEventListener("DOMContentLoaded", () => {
     announcementList.innerHTML =
       '<p class="announcement-empty-state">Loading announcements...</p>';
     try {
-      const response = await fetch("/announcements/manage", {
-        headers: getAuthorizationHeaders(),
-      });
+      const response = await fetch(
+        "/announcements/manage",
+        withSessionCredentials()
+      );
+      if (response.status === 401) {
+        handleAuthenticationFailure();
+        closeAnnouncementsModal();
+        return;
+      }
       const result = await response.json();
       if (!response.ok) {
         throw new Error(result.detail || "Unable to load announcements.");
@@ -525,12 +581,16 @@ document.addEventListener("DOMContentLoaded", () => {
     try {
       const response = await fetch(
         `/announcements/${encodeURIComponent(announcement.id)}`,
-        {
+        withSessionCredentials({
           method: "DELETE",
-          headers: getAuthorizationHeaders(),
-        }
+        })
       );
-      const result = await response.json();
+      if (response.status === 401) {
+        handleAuthenticationFailure();
+        closeAnnouncementsModal();
+        return;
+      }
+      const result = await parseResponsePayload(response);
       if (!response.ok) {
         throw new Error(result.detail || "Unable to delete announcement.");
       }
@@ -557,9 +617,35 @@ document.addEventListener("DOMContentLoaded", () => {
       closeAnnouncementsModal();
     }
   });
-  window.addEventListener("keydown", (event) => {
-    if (event.key === "Escape" && !announcementsModal.classList.contains("hidden")) {
+  announcementsModal.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
       closeAnnouncementsModal();
+      return;
+    }
+
+    if (event.key !== "Tab") {
+      return;
+    }
+
+    const focusableElements = getFocusableElements(announcementsModal);
+    if (focusableElements.length === 0) {
+      event.preventDefault();
+      return;
+    }
+
+    const firstFocusableElement = focusableElements[0];
+    const lastFocusableElement = focusableElements[focusableElements.length - 1];
+
+    if (event.shiftKey && document.activeElement === firstFocusableElement) {
+      event.preventDefault();
+      lastFocusableElement.focus();
+    } else if (
+      !event.shiftKey &&
+      document.activeElement === lastFocusableElement
+    ) {
+      event.preventDefault();
+      firstFocusableElement.focus();
     }
   });
 
@@ -586,24 +672,31 @@ document.addEventListener("DOMContentLoaded", () => {
       : "/announcements";
 
     try {
-      const response = await fetch(endpoint, {
-        method: isEditing ? "PUT" : "POST",
-        headers: {
-          ...getAuthorizationHeaders(),
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(payload),
-      });
-      const result = await response.json();
+      const response = await fetch(
+        endpoint,
+        withSessionCredentials({
+          method: isEditing ? "PUT" : "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(payload),
+        })
+      );
+      if (response.status === 401) {
+        handleAuthenticationFailure();
+        closeAnnouncementsModal();
+        return;
+      }
+      const result = await parseResponsePayload(response);
       if (!response.ok) {
         throw new Error(result.detail || "Unable to save announcement.");
       }
       resetAnnouncementForm();
+      await Promise.all([loadManagedAnnouncements(), fetchActiveAnnouncements()]);
       showAnnouncementFormMessage(
         isEditing ? "Announcement updated." : "Announcement added.",
         "success"
       );
-      await Promise.all([loadManagedAnnouncements(), fetchActiveAnnouncements()]);
     } catch (error) {
       showAnnouncementFormMessage(error.message || "Unable to save announcement.");
     }
@@ -1126,16 +1219,18 @@ document.addEventListener("DOMContentLoaded", () => {
       `Are you sure you want to unregister ${email} from ${activity}?`,
       async () => {
         try {
+          const query = new URLSearchParams({ email });
           const response = await fetch(
-            `/activities/${encodeURIComponent(
-              activity
-            )}/unregister?email=${encodeURIComponent(
-              email
-            )}&teacher_username=${encodeURIComponent(currentUser.username)}`,
-            {
+            `/activities/${encodeURIComponent(activity)}/unregister?${query.toString()}`,
+            withSessionCredentials({
               method: "POST",
-            }
+            })
           );
+
+          if (response.status === 401) {
+            handleAuthenticationFailure();
+            return;
+          }
 
           const result = await response.json();
 
@@ -1183,16 +1278,18 @@ document.addEventListener("DOMContentLoaded", () => {
     const activity = activityInput.value;
 
     try {
+      const query = new URLSearchParams({ email });
       const response = await fetch(
-        `/activities/${encodeURIComponent(
-          activity
-        )}/signup?email=${encodeURIComponent(
-          email
-        )}&teacher_username=${encodeURIComponent(currentUser.username)}`,
-        {
+        `/activities/${encodeURIComponent(activity)}/signup?${query.toString()}`,
+        withSessionCredentials({
           method: "POST",
-        }
+        })
       );
+
+      if (response.status === 401) {
+        handleAuthenticationFailure();
+        return;
+      }
 
       const result = await response.json();
 
