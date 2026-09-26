@@ -151,6 +151,11 @@ document.addEventListener("DOMContentLoaded", () => {
     showMessage("Your session has ended. Please sign in again.", "info");
   }
 
+  function handleAnnouncementAccessDenied() {
+    closeAnnouncementsModal();
+    showMessage("You do not have permission to manage announcements.", "error");
+  }
+
   function canManageAnnouncements() {
     return currentUser && currentUser.role === "admin";
   }
@@ -472,6 +477,10 @@ document.addEventListener("DOMContentLoaded", () => {
         closeAnnouncementsModal();
         return;
       }
+      if (response.status === 403) {
+        handleAnnouncementAccessDenied();
+        return;
+      }
       const result = await response.json();
       if (!response.ok) {
         throw new Error(result.detail || "Unable to load announcements.");
@@ -590,6 +599,10 @@ document.addEventListener("DOMContentLoaded", () => {
         closeAnnouncementsModal();
         return;
       }
+      if (response.status === 403) {
+        handleAnnouncementAccessDenied();
+        return;
+      }
       const result = await parseResponsePayload(response);
       if (!response.ok) {
         throw new Error(result.detail || "Unable to delete announcement.");
@@ -685,6 +698,10 @@ document.addEventListener("DOMContentLoaded", () => {
       if (response.status === 401) {
         handleAuthenticationFailure();
         closeAnnouncementsModal();
+        return;
+      }
+      if (response.status === 403) {
+        handleAnnouncementAccessDenied();
         return;
       }
       const result = await parseResponsePayload(response);

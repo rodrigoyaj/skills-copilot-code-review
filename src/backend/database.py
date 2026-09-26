@@ -93,8 +93,8 @@ def init_database():
     if announcements_collection.count_documents({}) == 0:
         announcements_collection.insert_many(initial_announcements)
 
-    _cleanup_sessions()
     _ensure_session_indexes()
+    _cleanup_sessions()
 
 # Initial database if empty
 initial_activities = {

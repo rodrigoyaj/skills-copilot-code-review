@@ -15,7 +15,12 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 SESSION_COOKIE_NAME = "access_token"
 SESSION_DURATION = timedelta(hours=12)
-SESSION_COOKIE_SECURE = os.getenv("SESSION_COOKIE_SECURE")
+SESSION_COOKIE_SECURE = os.getenv("SESSION_COOKIE_SECURE", "false").lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
 
 
 class LoginCredentials(BaseModel):
@@ -27,31 +32,24 @@ def _token_hash(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
-def _cookie_is_secure(request: Request) -> bool:
-    if SESSION_COOKIE_SECURE is not None:
-        return SESSION_COOKIE_SECURE.lower() in {"1", "true", "yes", "on"}
-
-    return request.url.scheme == "https"
-
-
-def _set_session_cookie(response: Response, token: str, request: Request) -> None:
+def _set_session_cookie(response: Response, token: str) -> None:
     response.set_cookie(
         key=SESSION_COOKIE_NAME,
         value=token,
         httponly=True,
         samesite="lax",
-        secure=_cookie_is_secure(request),
+        secure=SESSION_COOKIE_SECURE,
         max_age=int(SESSION_DURATION.total_seconds()),
         path="/"
     )
 
 
-def _clear_session_cookie(response: Response, request: Request) -> None:
+def _clear_session_cookie(response: Response) -> None:
     response.delete_cookie(
         key=SESSION_COOKIE_NAME,
         httponly=True,
         samesite="lax",
-        secure=_cookie_is_secure(request),
+        secure=SESSION_COOKIE_SECURE,
         path="/"
     )
 
@@ -128,7 +126,7 @@ def login(
         "username": teacher["_id"],
         "expires_at": datetime.now(timezone.utc) + SESSION_DURATION
     })
-    _set_session_cookie(response, access_token, request)
+    _set_session_cookie(response, access_token)
 
     return {
         "username": teacher.get("username", teacher["_id"]),
@@ -154,5 +152,5 @@ def logout(request: Request, response: Response) -> Dict[str, str]:
     if token:
         sessions_collection.delete_one({"token_hash": _token_hash(token)})
 
-    _clear_session_cookie(response, request)
+    _clear_session_cookie(response)
     return {"message": "Logged out"}

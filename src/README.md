@@ -31,7 +31,7 @@ A FastAPI application for extracurricular activities and school announcements.
 | Method | Endpoint                                                          | Description                                                          |
 | ------ | ----------------------------------------------------------------- | -------------------------------------------------------------------- |
 | GET    | `/activities`                                                     | Get all activities with their details and current participant count  |
-| POST   | `/activities/{activity_name}/signup?email=student@mergington.edu` | Sign up for an activity as the signed-in teacher                     |
+| POST   | `/activities/{activity_name}/signup?email=student@mergington.edu` | Sign up for an activity as the signed-in teacher (session cookie required) |
 | POST   | `/auth/login`                                                     | Sign in with a JSON body (`username`, `password`) and receive an HttpOnly session cookie |
 | GET    | `/announcements`                                                  | Get announcements within their start and expiration dates            |
 | GET    | `/announcements/manage`                                           | List all announcements (session cookie required)                     |
