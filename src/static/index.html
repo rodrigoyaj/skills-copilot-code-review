@@ -12,9 +12,7 @@
     />
   </head>
   <body>
-    <div class="announcement-banner">
-      <span aria-hidden="true">📢</span>
-      Activity registration is open until the end of the month. Don't lose your spot!
+    <div id="announcement-banner" class="announcement-banner hidden" aria-live="polite">
     </div>
     <header>
       <h1>Mergington High School</h1>
@@ -27,6 +25,9 @@
           </button>
           <div id="user-info" class="hidden">
             <span id="display-name"></span>
+            <button id="manage-announcements-button" class="header-action-button">
+              Manage announcements
+            </button>
             <button id="logout-button">Logout</button>
           </div>
         </div>
@@ -135,6 +136,70 @@
           <button type="submit">Login</button>
         </form>
         <div id="login-message" class="hidden message"></div>
+      </div>
+    </div>
+
+    <!-- Announcement management dialog -->
+    <div
+      id="announcements-modal"
+      class="modal hidden"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="announcements-title"
+    >
+      <div class="modal-content announcements-modal-content">
+        <button id="close-announcements-modal" class="dialog-close" type="button" aria-label="Close announcements">&times;</button>
+        <div class="announcements-dialog-heading">
+          <span class="announcements-heading-icon" aria-hidden="true">📢</span>
+          <div>
+            <h3 id="announcements-title">Announcements</h3>
+            <p>Keep families and students up to date.</p>
+          </div>
+        </div>
+
+        <section class="announcement-editor" aria-labelledby="announcement-editor-title">
+          <h4 id="announcement-editor-title">Create an announcement</h4>
+          <form id="announcement-form">
+            <div class="form-group">
+              <label for="announcement-message">Message</label>
+              <textarea
+                id="announcement-message"
+                name="message"
+                rows="3"
+                maxlength="1000"
+                placeholder="Share an important update..."
+                required
+              ></textarea>
+              <span class="field-hint">Up to 1,000 characters.</span>
+            </div>
+            <div class="announcement-date-fields">
+              <div class="form-group">
+                <label for="announcement-start-date">Start date <span>(optional)</span></label>
+                <input id="announcement-start-date" name="start_date" type="date" />
+              </div>
+              <div class="form-group">
+                <label for="announcement-expiration-date">Expiration date <span class="required-label">(required)</span></label>
+                <input id="announcement-expiration-date" name="expiration_date" type="date" required />
+              </div>
+            </div>
+            <p class="date-help">Announcements are shown from the start date through the expiration date.</p>
+            <div id="announcement-form-message" class="announcement-form-message hidden" role="status"></div>
+            <div class="announcement-form-actions">
+              <button id="save-announcement-button" type="submit">Add announcement</button>
+              <button id="cancel-announcement-edit" class="secondary-button hidden" type="button">Cancel edit</button>
+            </div>
+          </form>
+        </section>
+
+        <section class="announcement-list-section" aria-labelledby="announcement-list-title">
+          <div class="announcement-list-heading">
+            <h4 id="announcement-list-title">All announcements</h4>
+            <span id="announcement-count" class="announcement-count"></span>
+          </div>
+          <div id="announcement-list" class="announcement-list" aria-live="polite">
+            <p class="announcement-empty-state">Loading announcements...</p>
+          </div>
+        </section>
       </div>
     </div>
 
