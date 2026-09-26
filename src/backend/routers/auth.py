@@ -109,7 +109,17 @@ def get_current_teacher(request: Request) -> Dict[str, Any]:
     if not token:
         raise HTTPException(status_code=401, detail="Authentication required")
 
-    session = sessions_collection.find_one({"token_hash": _token_hash(token)})
+    now = datetime.now(timezone.utc)
+    token_hash = _token_hash(token)
+    session = sessions_collection.find_one({
+        "token_hash": token_hash,
+        "$or": [
+            {"expires_at": {"$type": "date", "$gt": now}},
+            {"expires_at": {"$type": "number", "$gt": now.timestamp()}}
+        ]
+    })
+    if not session:
+        session = sessions_collection.find_one({"token_hash": token_hash})
     if not session or not _session_is_active(session):
         if session:
             sessions_collection.delete_one({"_id": session["_id"]})

@@ -69,7 +69,7 @@ def signup_for_activity(
     email: str,
     _teacher: Dict[str, Any] = Depends(get_current_teacher)
 ):
-    """Sign up a student for an activity - requires teacher authentication."""
+    """Sign up a student via the signed-in session cookie on a same-origin request."""
     require_trusted_origin(request)
 
     if not activities_collection.find_one({"_id": activity_name}, {"_id": 1}):
@@ -96,7 +96,7 @@ def unregister_from_activity(
     email: str,
     _teacher: Dict[str, Any] = Depends(get_current_teacher)
 ):
-    """Remove a student from an activity - requires teacher authentication."""
+    """Unregister a student via the signed-in session cookie on a same-origin request."""
     require_trusted_origin(request)
 
     if not activities_collection.find_one({"_id": activity_name}, {"_id": 1}):
