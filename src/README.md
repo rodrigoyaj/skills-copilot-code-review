@@ -1,11 +1,12 @@
-# Mergington High School Activities API
+# Mergington High School API
 
-A super simple FastAPI application that allows students to view and sign up for extracurricular activities.
+A FastAPI application for extracurricular activities and school announcements.
 
 ## Features
 
 - View all available extracurricular activities
 - Sign up for activities
+- Display current announcements and manage them as a signed-in teacher
 
 ## Getting Started
 
@@ -31,6 +32,16 @@ A super simple FastAPI application that allows students to view and sign up for 
 | ------ | ----------------------------------------------------------------- | ------------------------------------------------------------------- |
 | GET    | `/activities`                                                     | Get all activities with their details and current participant count |
 | POST   | `/activities/{activity_name}/signup?email=student@mergington.edu` | Sign up for an activity                                             |
+| POST   | `/auth/login?username=...&password=...`                           | Sign in and receive a bearer token                                  |
+| GET    | `/announcements`                                                  | Get announcements within their start and expiration dates           |
+| GET    | `/announcements/manage`                                           | List all announcements (bearer token required)                     |
+| POST   | `/announcements`                                                  | Create an announcement (bearer token required)                     |
+| PUT    | `/announcements/{announcement_id}`                                | Update an announcement (bearer token required)                     |
+| DELETE | `/announcements/{announcement_id}`                                | Delete an announcement (bearer token required)                     |
+| GET    | `/auth/check-session`                                             | Validate the bearer token and return the signed-in teacher          |
+| POST   | `/auth/logout`                                                    | Revoke the bearer token                                             |
+
+Announcement create and update requests use JSON with a `message` (up to 1,000 characters), a required `expiration_date` (`YYYY-MM-DD`), and an optional `start_date` (`YYYY-MM-DD`). The start date must not be after the expiration date. Include `Authorization: Bearer <token>` for protected endpoints. Announcements are stored in MongoDB; initialization adds an example announcement when that collection is empty.
 
 ## Data Model
 
