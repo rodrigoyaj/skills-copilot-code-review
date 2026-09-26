@@ -25,7 +25,13 @@
           </button>
           <div id="user-info" class="hidden">
             <span id="display-name"></span>
-            <button id="manage-announcements-button" class="header-action-button">
+            <button
+              id="manage-announcements-button"
+              class="header-action-button"
+              aria-haspopup="dialog"
+              aria-controls="announcements-modal"
+              aria-expanded="false"
+            >
               Manage announcements
             </button>
             <button id="logout-button">Logout</button>

@@ -4,11 +4,11 @@ from datetime import date
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from ..database import announcements_collection
-from .auth import get_current_teacher
+from .auth import get_current_teacher, require_trusted_origin
 
 router = APIRouter(prefix="/announcements", tags=["announcements"])
 
@@ -45,6 +45,17 @@ def _serialize(announcement: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def require_announcement_manager(
+    teacher: Dict[str, Any] = Depends(get_current_teacher)
+) -> Dict[str, Any]:
+    if teacher.get("role") != "admin":
+        raise HTTPException(
+            status_code=403,
+            detail="You are not authorized to manage announcements"
+        )
+    return teacher
+
+
 @router.get("", response_model=List[Dict[str, Any]])
 def get_active_announcements() -> List[Dict[str, Any]]:
     """Return announcements that are currently within their display dates."""
@@ -64,7 +75,7 @@ def get_active_announcements() -> List[Dict[str, Any]]:
 
 @router.get("/manage", response_model=List[Dict[str, Any]])
 def get_all_announcements(
-    _teacher: Dict[str, Any] = Depends(get_current_teacher)
+    _teacher: Dict[str, Any] = Depends(require_announcement_manager)
 ) -> List[Dict[str, Any]]:
     """Return all announcements for the signed-in manager."""
     return [
@@ -75,10 +86,12 @@ def get_all_announcements(
 
 @router.post("", status_code=201)
 def create_announcement(
+    request: Request,
     payload: AnnouncementPayload,
-    _teacher: Dict[str, Any] = Depends(get_current_teacher)
+    _teacher: Dict[str, Any] = Depends(require_announcement_manager)
 ) -> Dict[str, Any]:
     """Create an announcement."""
+    require_trusted_origin(request)
     announcement = {"_id": str(uuid4()), **_announcement_data(payload)}
     announcements_collection.insert_one(announcement)
     return _serialize(announcement)
@@ -86,11 +99,13 @@ def create_announcement(
 
 @router.put("/{announcement_id}")
 def update_announcement(
+    request: Request,
     announcement_id: str,
     payload: AnnouncementPayload,
-    _teacher: Dict[str, Any] = Depends(get_current_teacher)
+    _teacher: Dict[str, Any] = Depends(require_announcement_manager)
 ) -> Dict[str, Any]:
     """Replace an announcement's message and display dates."""
+    require_trusted_origin(request)
     announcement = _announcement_data(payload)
     result = announcements_collection.update_one(
         {"_id": announcement_id},
@@ -103,10 +118,12 @@ def update_announcement(
 
 @router.delete("/{announcement_id}")
 def delete_announcement(
+    request: Request,
     announcement_id: str,
-    _teacher: Dict[str, Any] = Depends(get_current_teacher)
+    _teacher: Dict[str, Any] = Depends(require_announcement_manager)
 ) -> Dict[str, str]:
     """Delete an announcement."""
+    require_trusted_origin(request)
     result = announcements_collection.delete_one({"_id": announcement_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Announcement not found")
