@@ -15,12 +15,8 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 SESSION_COOKIE_NAME = "access_token"
 SESSION_DURATION = timedelta(hours=12)
-SESSION_COOKIE_SECURE = os.getenv("SESSION_COOKIE_SECURE", "false").lower() in {
-    "1",
-    "true",
-    "yes",
-    "on",
-}
+SESSION_COOKIE_SECURE_OVERRIDE = os.getenv("SESSION_COOKIE_SECURE")
+LOCAL_COOKIE_HOSTS = {"localhost", "127.0.0.1", "::1"}
 
 
 class LoginCredentials(BaseModel):
@@ -32,24 +28,35 @@ def _token_hash(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
-def _set_session_cookie(response: Response, token: str) -> None:
+def _env_flag(value: str) -> bool:
+    return value.lower() in {"1", "true", "yes", "on"}
+
+
+def _should_use_secure_cookie(request: Request) -> bool:
+    if SESSION_COOKIE_SECURE_OVERRIDE is not None:
+        return _env_flag(SESSION_COOKIE_SECURE_OVERRIDE)
+
+    return (request.url.hostname or "").lower() not in LOCAL_COOKIE_HOSTS
+
+
+def _set_session_cookie(response: Response, token: str, request: Request) -> None:
     response.set_cookie(
         key=SESSION_COOKIE_NAME,
         value=token,
         httponly=True,
         samesite="lax",
-        secure=SESSION_COOKIE_SECURE,
+        secure=_should_use_secure_cookie(request),
         max_age=int(SESSION_DURATION.total_seconds()),
         path="/"
     )
 
 
-def _clear_session_cookie(response: Response) -> None:
+def _clear_session_cookie(response: Response, request: Request) -> None:
     response.delete_cookie(
         key=SESSION_COOKIE_NAME,
         httponly=True,
         samesite="lax",
-        secure=SESSION_COOKIE_SECURE,
+        secure=_should_use_secure_cookie(request),
         path="/"
     )
 
@@ -126,7 +133,7 @@ def login(
         "username": teacher["_id"],
         "expires_at": datetime.now(timezone.utc) + SESSION_DURATION
     })
-    _set_session_cookie(response, access_token)
+    _set_session_cookie(response, access_token, request)
 
     return {
         "username": teacher.get("username", teacher["_id"]),
@@ -152,5 +159,5 @@ def logout(request: Request, response: Response) -> Dict[str, str]:
     if token:
         sessions_collection.delete_one({"token_hash": _token_hash(token)})
 
-    _clear_session_cookie(response)
+    _clear_session_cookie(response, request)
     return {"message": "Logged out"}

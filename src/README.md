@@ -34,10 +34,10 @@ A FastAPI application for extracurricular activities and school announcements.
 | POST   | `/activities/{activity_name}/signup?email=student@mergington.edu` | Sign up for an activity as the signed-in teacher (session cookie required) |
 | POST   | `/auth/login`                                                     | Sign in with a JSON body (`username`, `password`) and receive an HttpOnly session cookie |
 | GET    | `/announcements`                                                  | Get announcements within their start and expiration dates            |
-| GET    | `/announcements/manage`                                           | List all announcements (session cookie required)                     |
-| POST   | `/announcements`                                                  | Create an announcement (session cookie required)                     |
-| PUT    | `/announcements/{announcement_id}`                                | Update an announcement (session cookie required)                     |
-| DELETE | `/announcements/{announcement_id}`                                | Delete an announcement (session cookie required)                     |
+| GET    | `/announcements/manage`                                           | List all announcements (authenticated admin session cookie required) |
+| POST   | `/announcements`                                                  | Create an announcement (authenticated admin session cookie required) |
+| PUT    | `/announcements/{announcement_id}`                                | Update an announcement (authenticated admin session cookie required) |
+| DELETE | `/announcements/{announcement_id}`                                | Delete an announcement (authenticated admin session cookie required) |
 | GET    | `/auth/check-session`                                             | Validate the current session cookie and return the signed-in teacher |
 | POST   | `/auth/logout`                                                    | Revoke the current session cookie                                    |
 
