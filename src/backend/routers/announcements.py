@@ -4,11 +4,11 @@ from datetime import date
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from ..database import announcements_collection
-from .auth import get_current_teacher
+from .auth import get_current_teacher, require_trusted_origin
 
 router = APIRouter(prefix="/announcements", tags=["announcements"])
 
@@ -86,10 +86,12 @@ def get_all_announcements(
 
 @router.post("", status_code=201)
 def create_announcement(
+    request: Request,
     payload: AnnouncementPayload,
     _teacher: Dict[str, Any] = Depends(require_announcement_manager)
 ) -> Dict[str, Any]:
     """Create an announcement."""
+    require_trusted_origin(request)
     announcement = {"_id": str(uuid4()), **_announcement_data(payload)}
     announcements_collection.insert_one(announcement)
     return _serialize(announcement)
@@ -97,11 +99,13 @@ def create_announcement(
 
 @router.put("/{announcement_id}")
 def update_announcement(
+    request: Request,
     announcement_id: str,
     payload: AnnouncementPayload,
     _teacher: Dict[str, Any] = Depends(require_announcement_manager)
 ) -> Dict[str, Any]:
     """Replace an announcement's message and display dates."""
+    require_trusted_origin(request)
     announcement = _announcement_data(payload)
     result = announcements_collection.update_one(
         {"_id": announcement_id},
@@ -114,10 +118,12 @@ def update_announcement(
 
 @router.delete("/{announcement_id}")
 def delete_announcement(
+    request: Request,
     announcement_id: str,
     _teacher: Dict[str, Any] = Depends(require_announcement_manager)
 ) -> Dict[str, str]:
     """Delete an announcement."""
+    require_trusted_origin(request)
     result = announcements_collection.delete_one({"_id": announcement_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Announcement not found")

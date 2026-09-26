@@ -5,6 +5,7 @@ import hashlib
 import os
 import secrets
 from typing import Any, Dict
+from urllib.parse import urlparse
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, Field
@@ -89,6 +90,19 @@ def _session_is_active(session: Dict[str, Any]) -> bool:
     return expires_at > datetime.now(timezone.utc)
 
 
+def require_trusted_origin(request: Request) -> None:
+    """Reject cross-site state-changing requests for cookie-authenticated endpoints."""
+    expected_origin = str(request.base_url).rstrip("/")
+    source = request.headers.get("origin") or request.headers.get("referer")
+    if not source:
+        raise HTTPException(status_code=403, detail="Origin validation failed")
+
+    parsed = urlparse(source)
+    request_origin = f"{parsed.scheme}://{parsed.netloc}" if parsed.scheme and parsed.netloc else ""
+    if request_origin != expected_origin:
+        raise HTTPException(status_code=403, detail="Origin validation failed")
+
+
 def get_current_teacher(request: Request) -> Dict[str, Any]:
     """Require an unexpired server-issued session cookie."""
     token = request.cookies.get(SESSION_COOKIE_NAME)
@@ -112,15 +126,11 @@ def get_current_teacher(request: Request) -> Dict[str, Any]:
 def login(
     request: Request,
     response: Response,
-    credentials: LoginCredentials | None = Body(default=None),
-    username: str | None = None,
-    password: str | None = None
+    credentials: LoginCredentials = Body(...)
 ) -> Dict[str, Any]:
     """Login a teacher account."""
-    username = credentials.username if credentials else username
-    password = credentials.password if credentials else password
-    if not username or not password:
-        raise HTTPException(status_code=422, detail="Username and password are required")
+    username = credentials.username
+    password = credentials.password
 
     teacher = teachers_collection.find_one({"_id": username})
 
@@ -155,6 +165,7 @@ def check_session(teacher: Dict[str, Any] = Depends(get_current_teacher)) -> Dic
 @router.post("/logout")
 def logout(request: Request, response: Response) -> Dict[str, str]:
     """Revoke the current session cookie."""
+    require_trusted_origin(request)
     token = request.cookies.get(SESSION_COOKIE_NAME)
     if token:
         sessions_collection.delete_one({"token_hash": _token_hash(token)})

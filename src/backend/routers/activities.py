@@ -2,10 +2,10 @@
 
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 
 from ..database import activities_collection
-from .auth import get_current_teacher
+from .auth import get_current_teacher, require_trusted_origin
 
 router = APIRouter(
     prefix="/activities",
@@ -64,53 +64,53 @@ def get_available_days() -> List[str]:
 
 @router.post("/{activity_name}/signup")
 def signup_for_activity(
+    request: Request,
     activity_name: str,
     email: str,
     _teacher: Dict[str, Any] = Depends(get_current_teacher)
 ):
     """Sign up a student for an activity - requires teacher authentication."""
-    activity = activities_collection.find_one({"_id": activity_name})
-    if not activity:
+    require_trusted_origin(request)
+
+    if not activities_collection.find_one({"_id": activity_name}, {"_id": 1}):
         raise HTTPException(status_code=404, detail="Activity not found")
 
-    if email in activity["participants"]:
-        raise HTTPException(
-            status_code=400, detail="Already signed up for this activity")
-
     result = activities_collection.update_one(
-        {"_id": activity_name},
+        {
+            "_id": activity_name,
+            "participants": {"$ne": email}
+        },
         {"$push": {"participants": email}}
     )
 
     if result.modified_count == 0:
-        raise HTTPException(
-            status_code=500, detail="Failed to update activity")
+        raise HTTPException(status_code=400, detail="Already signed up for this activity")
 
     return {"message": f"Signed up {email} for {activity_name}"}
 
 
 @router.post("/{activity_name}/unregister")
 def unregister_from_activity(
+    request: Request,
     activity_name: str,
     email: str,
     _teacher: Dict[str, Any] = Depends(get_current_teacher)
 ):
     """Remove a student from an activity - requires teacher authentication."""
-    activity = activities_collection.find_one({"_id": activity_name})
-    if not activity:
+    require_trusted_origin(request)
+
+    if not activities_collection.find_one({"_id": activity_name}, {"_id": 1}):
         raise HTTPException(status_code=404, detail="Activity not found")
 
-    if email not in activity["participants"]:
-        raise HTTPException(
-            status_code=400, detail="Not registered for this activity")
-
     result = activities_collection.update_one(
-        {"_id": activity_name},
+        {
+            "_id": activity_name,
+            "participants": email
+        },
         {"$pull": {"participants": email}}
     )
 
     if result.modified_count == 0:
-        raise HTTPException(
-            status_code=500, detail="Failed to update activity")
+        raise HTTPException(status_code=400, detail="Not registered for this activity")
 
     return {"message": f"Unregistered {email} from {activity_name}"}

@@ -475,17 +475,18 @@ document.addEventListener("DOMContentLoaded", () => {
       if (response.status === 401) {
         handleAuthenticationFailure();
         closeAnnouncementsModal();
-        return;
+        return false;
       }
       if (response.status === 403) {
         handleAnnouncementAccessDenied();
-        return;
+        return false;
       }
       const result = await response.json();
       if (!response.ok) {
         throw new Error(result.detail || "Unable to load announcements.");
       }
       renderManagedAnnouncements(result);
+      return true;
     } catch (error) {
       announcementCount.textContent = "";
       announcementList.innerHTML = "";
@@ -493,6 +494,7 @@ document.addEventListener("DOMContentLoaded", () => {
       errorMessage.className = "announcement-empty-state";
       errorMessage.textContent = error.message || "Unable to load announcements.";
       announcementList.appendChild(errorMessage);
+      return false;
     }
   }
 
@@ -610,7 +612,13 @@ document.addEventListener("DOMContentLoaded", () => {
       if (editingAnnouncementId === announcement.id) {
         resetAnnouncementForm();
       }
-      await Promise.all([loadManagedAnnouncements(), fetchActiveAnnouncements()]);
+      const [managedAnnouncementsReloaded] = await Promise.all([
+        loadManagedAnnouncements(),
+        fetchActiveAnnouncements(),
+      ]);
+      if (!managedAnnouncementsReloaded) {
+        return;
+      }
     } catch (error) {
       showAnnouncementFormMessage(error.message || "Unable to delete announcement.");
     }
@@ -709,7 +717,13 @@ document.addEventListener("DOMContentLoaded", () => {
         throw new Error(result.detail || "Unable to save announcement.");
       }
       resetAnnouncementForm();
-      await Promise.all([loadManagedAnnouncements(), fetchActiveAnnouncements()]);
+      const [managedAnnouncementsReloaded] = await Promise.all([
+        loadManagedAnnouncements(),
+        fetchActiveAnnouncements(),
+      ]);
+      if (!managedAnnouncementsReloaded) {
+        return;
+      }
       showAnnouncementFormMessage(
         isEditing ? "Announcement updated." : "Announcement added.",
         "success"
